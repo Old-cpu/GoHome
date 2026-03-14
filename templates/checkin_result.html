@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}签到成功 - 思乡签到{% endblock %}
+
+{% block content %}
+<div class="checkin-result">
+    <div class="success-icon">✓</div>
+    <h2>签到成功！</h2>
+    <p class="result-date">{{ user.get_days_away_from_home() }}天离家</p>
+
+    <div class="quote-card">
+        <div class="quote-icon">"</div>
+        <p class="quote-content">{{ quote.content }}</p>
+        <p class="quote-category">—— {{ quote.category }}</p>
+    </div>
+
+    <div class="share-section">
+        <h3>分享此刻</h3>
+        <div class="share-text" id="shareText">
+            我在外已经 {{ user.get_days_away_from_home() }} 天了，今天签到。{{ quote.content }}
+        </div>
+        <button class="btn btn-secondary" onclick="copyShareText()">复制分享</button>
+    </div>
+
+    <div class="result-actions">
+        <a href="{{ url_for('dashboard.index') }}" class="btn btn-primary">返回首页</a>
+        <a href="{{ url_for('checkin.history') }}" class="btn btn-secondary">查看历史</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function copyShareText() {
+    const text = document.getElementById('shareText').innerText;
+    navigator.clipboard.writeText(text).then(() => {
+        alert('已复制到剪贴板');
+    });
+}
+</script>
+{% endblock %}
