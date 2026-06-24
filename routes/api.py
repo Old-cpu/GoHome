@@ -5,9 +5,24 @@ from models.storage import UserStorage
 from models.user import User
 from models.badge import BadgeStorage
 from models.ai_quote import AIQuoteStorage
+from utils.quote_generator import QuoteGenerator
+from config import AI_API_KEY, AI_API_BASE_URL, AI_MODEL
 from routes.auth import login_required
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
+
+
+def serialize_badge_definition(badge_id):
+    """Return a badge definition with its public id included."""
+    definition = BadgeStorage.get_definition(badge_id)
+    if not definition:
+        return None
+    return {
+        'id': badge_id,
+        'name': definition['name'],
+        'description': definition['description'],
+        'category': definition.get('category', ''),
+    }
 
 
 @api_bp.route('/login', methods=['POST'])
@@ -35,6 +50,7 @@ def login():
             'username': user.username,
             'hometown': user.hometown,
             'current_city': user.current_city,
+            'leave_home_date': user.leave_home_date,
             'family_role': getattr(user, 'family_role', '妈妈'),
             'nickname': getattr(user, 'nickname', ''),
             'tone_style': getattr(user, 'tone_style', '唠叨型')
@@ -172,35 +188,50 @@ def do_checkin():
     if checkin_time.hour >= 2:
         badge = BadgeStorage.add_badge(user.id, 'late_night')
         if badge:
-            new_badges.append(BadgeStorage.get_definition('late_night'))
+            new_badges.append(serialize_badge_definition('late_night'))
     elif checkin_time.hour < 6:
         badge = BadgeStorage.add_badge(user.id, 'early_bird')
         if badge:
-            new_badges.append(BadgeStorage.get_definition('early_bird'))
+            new_badges.append(serialize_badge_definition('early_bird'))
 
     # AI 生成家人问候
     quote_content = None
     from utils.ai_hometown_generator import AIHometownGenerator
-    import os
-    AI_API_KEY = os.environ.get('AI_API_KEY')
+    quote_dialect = ''
+    quote_category = '内置'
 
     if AI_API_KEY:
-        generator = AIHometownGenerator(AI_API_KEY)
-        user_info = {
-            'hometown': user.hometown,
-            'family_role': getattr(user, 'family_role', '妈妈'),
-            'nickname': getattr(user, 'nickname', '娃'),
-            'tone_style': getattr(user, 'tone_style', '唠叨型'),
-        }
-        ai_result = generator.generate_family_greeting(user_info)
-        if ai_result:
-            quote_content = ai_result['content']
-            AIQuoteStorage.add_quote(
-                user.id,
-                quote_content,
-                user_info['family_role'],
-                ai_result.get('dialect', '')
+        try:
+            generator = AIHometownGenerator(
+                api_key=AI_API_KEY,
+                base_url=AI_API_BASE_URL,
+                model=AI_MODEL
             )
+            user_info = {
+                'hometown': user.hometown,
+                'current_city': getattr(user, 'current_city', ''),
+                'family_role': getattr(user, 'family_role', '妈妈'),
+                'nickname': getattr(user, 'nickname', '娃'),
+                'tone_style': getattr(user, 'tone_style', '唠叨型'),
+            }
+            ai_result = generator.generate_family_greeting(user_info)
+            if ai_result:
+                quote_content = ai_result['content']
+                quote_dialect = ai_result.get('dialect', '')
+                quote_category = 'AI 生成'
+                AIQuoteStorage.add_quote(
+                    user.id,
+                    quote_content,
+                    user_info['family_role'],
+                    quote_dialect
+                )
+        except Exception as e:
+            print(f"AI 生成失败：{e}")
+
+    if not quote_content:
+        quote = QuoteGenerator.get_random_quote(user.id)
+        quote_content = quote['content']
+        quote_category = quote.get('category', '内置')
 
     # 检查时间里程碑勋章
     days_away = user.get_days_away_from_home()
@@ -209,7 +240,7 @@ def do_checkin():
         if days_away == threshold:
             badge = BadgeStorage.add_badge(user.id, badge_id)
             if badge:
-                new_badges.append(BadgeStorage.get_definition(badge_id))
+                new_badges.append(serialize_badge_definition(badge_id))
 
     # 检查连续签到勋章
     stats = user.get_checkin_stats()
@@ -218,7 +249,7 @@ def do_checkin():
         if stats['current_streak'] == threshold:
             badge = BadgeStorage.add_badge(user.id, badge_id)
             if badge:
-                new_badges.append(BadgeStorage.get_definition(badge_id))
+                new_badges.append(serialize_badge_definition(badge_id))
 
     # 返回结果
     result = {
@@ -228,12 +259,12 @@ def do_checkin():
         'new_badges': new_badges
     }
 
-    if quote_content:
-        result['quote'] = {
-            'content': quote_content,
-            'family_role': getattr(user, 'family_role', '妈妈'),
-            'dialect': getattr(user, 'hometown', '')
-        }
+    result['quote'] = {
+        'content': quote_content,
+        'family_role': getattr(user, 'family_role', '妈妈'),
+        'dialect': quote_dialect,
+        'category': quote_category
+    }
 
     return jsonify(result)
 

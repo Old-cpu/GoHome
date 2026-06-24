@@ -91,7 +91,7 @@ const handleCheckin = async () => {
   try {
     const response = await checkinAPI.doCheckin()
     if (response.data.success) {
-      await checkinStore.doCheckin()
+      checkinStore.applyCheckinResult(response.data)
       await badgesStore.fetchBadges()
       lastQuote.value = response.data.quote
     }

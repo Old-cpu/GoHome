@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, session, request
+from flask import Blueprint, render_template, redirect, url_for, flash, session, request, jsonify
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 from models.storage import UserStorage
@@ -114,6 +114,8 @@ def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
+            if request.path.startswith('/api/'):
+                return jsonify({'success': False, 'message': '请先登录'}), 401
             flash('请先登录', 'warning')
             return redirect(url_for('auth.login'))
         return f(*args, **kwargs)
