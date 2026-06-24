@@ -5,9 +5,10 @@ __pycache__/
 *.pyo
 .Python
 
-# pixi environments
-.pixi/*
-!.pixi/config.toml
+# Conda environments
+.conda/
+env/
+.envs/
 
 # Environment
 .env

@@ -96,7 +96,8 @@ const handleCheckin = async () => {
       hasCheckedIn.value = true
       quote.value = response.data.quote
       newBadges.value = response.data.new_badges || []
-      await checkinStore.doCheckin()
+      checkinStore.applyCheckinResult(response.data)
+      await badgesStore.fetchBadges()
     }
   } catch (err) {
     error.value = err.response?.data?.message || '签到失败'

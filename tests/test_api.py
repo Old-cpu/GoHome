@@ -3,6 +3,7 @@ import json
 import pytest
 from app import create_app
 from models.storage import UserStorage, CheckinStorage
+from models.badge import BadgeStorage
 from werkzeug.security import generate_password_hash
 from datetime import datetime
 
@@ -52,6 +53,10 @@ def test_user(app):
             if str(user['id']) in checkins:
                 del checkins[str(user['id'])]
                 CheckinStorage.save_all(checkins)
+            badges = BadgeStorage.get_all()
+            if str(user['id']) in badges:
+                del badges[str(user['id'])]
+                BadgeStorage.save_all(badges)
 
 
 class TestAuthAPI:
@@ -172,14 +177,18 @@ class TestProfileAPI:
     def test_get_profile_unauthorized(self, client):
         """测试未授权访问"""
         response = client.get('/api/profile')
-        # 未登录时会重定向到登录页
-        assert response.status_code == 302
+        data = response.get_json()
+        assert response.status_code == 401
+        assert data['success'] is False
+        assert '请先登录' in data['message']
 
     def test_get_profile_unauthorized_json(self, client):
         """测试未授权访问（JSON 请求）"""
         response = client.get('/api/profile', headers={'Accept': 'application/json'})
-        # 未登录时会重定向到登录页
-        assert response.status_code == 302
+        data = response.get_json()
+        assert response.status_code == 401
+        assert data['success'] is False
+        assert '请先登录' in data['message']
 
     def test_update_profile(self, client, test_user):
         """测试更新用户资料"""
@@ -212,14 +221,18 @@ class TestProfileAPI:
     def test_get_profile_unauthorized(self, client):
         """测试未授权访问"""
         response = client.get('/api/profile')
-        # 未登录时会重定向到登录页
-        assert response.status_code == 302
+        data = response.get_json()
+        assert response.status_code == 401
+        assert data['success'] is False
+        assert '请先登录' in data['message']
 
     def test_get_profile_unauthorized_json(self, client):
         """测试未授权访问（JSON 请求）"""
         response = client.get('/api/profile', headers={'Accept': 'application/json'})
-        # 未登录时会重定向到登录页
-        assert response.status_code == 302
+        data = response.get_json()
+        assert response.status_code == 401
+        assert data['success'] is False
+        assert '请先登录' in data['message']
 
 
 class TestCheckinAPI:
@@ -262,6 +275,8 @@ class TestCheckinAPI:
         assert data['success'] is True
         assert 'stats' in data
         assert 'checkin_date' in data
+        assert 'quote' in data
+        assert data['quote']['content']
 
     def test_get_checkin_status(self, client, test_user):
         """测试获取签到状态"""
@@ -283,5 +298,47 @@ class TestCheckinAPI:
     def test_get_checkin_status_unauthorized(self, client):
         """测试未授权访问签到状态"""
         response = client.get('/api/checkin/status')
-        # 未登录时会重定向到登录页
-        assert response.status_code == 302
+        data = response.get_json()
+        assert response.status_code == 401
+        assert data['success'] is False
+        assert '请先登录' in data['message']
+
+
+class TestBadgesAPI:
+    """测试勋章 API"""
+
+    def test_get_badge_definitions(self, client, test_user):
+        """测试获取勋章定义"""
+        username = test_user['username']
+        client.post(
+            '/api/login',
+            data=json.dumps({'username': username, 'password': 'password123'}),
+            content_type='application/json'
+        )
+
+        response = client.get('/api/badges/definitions')
+        data = response.get_json()
+
+        assert response.status_code == 200
+        assert set(data.keys()) == {'time', 'streak', 'special'}
+        assert sum(len(category['badges']) for category in data.values()) == 14
+        assert data['time']['badges'][0]['id'] == 'day_1'
+
+    def test_get_user_badges(self, client, test_user):
+        """测试获取用户已获得勋章"""
+        username = test_user['username']
+        BadgeStorage.add_badge(test_user['id'], 'streak_3')
+
+        client.post(
+            '/api/login',
+            data=json.dumps({'username': username, 'password': 'password123'}),
+            content_type='application/json'
+        )
+
+        response = client.get('/api/badges')
+        data = response.get_json()
+
+        assert response.status_code == 200
+        assert len(data) == 1
+        assert data[0]['id'] == 'streak_3'
+        assert data[0]['name'] == '🔥 三日热'

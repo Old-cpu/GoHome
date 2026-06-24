@@ -37,6 +37,7 @@
       <p class="auth-footer">
         没有账号？<router-link to="/register">立即注册</router-link>
       </p>
+      <p class="demo-hint">测试账号：demo / demo123</p>
       <p v-if="error" class="error-message">{{ error }}</p>
     </div>
   </div>
@@ -105,6 +106,13 @@ const handleLogin = async () => {
 .auth-footer a {
   color: #F5A623;
   text-decoration: none;
+}
+
+.demo-hint {
+  color: #888;
+  font-size: 13px;
+  margin-top: 12px;
+  text-align: center;
 }
 
 .checkbox-group {
